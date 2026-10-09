@@ -4,9 +4,9 @@ $host = 'localhost';
 $db   = 'postgres';
 $user = 'postgres';
 $pass = 'Rejalde01232026';
-$charset = 'utf8mb4';
 
-$dsn = "pgsql:host=$host;dbname=$db;charset=$charset";
+// Charset removed from DSN to fix the crash
+$dsn = "pgsql:host=$host;port=5432;dbname=$db";
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

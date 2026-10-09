@@ -7,18 +7,24 @@ function runSql($pdo, $sql, $params = []) {
     return $stmt;
 }
 
-// Read
 $txns = runSql($pdo, '
   SELECT bt.borrow_id, b.borrower_no, b.full_name,
          bt.borrow_date, bt.due_date, bt.status
   FROM borrow_transactions bt
   JOIN borrowers b ON bt.borrower_id = b.borrower_id
-  ORDER BY bt.borrow_id')
-->fetchAll();
+  ORDER BY bt.borrow_id
+')->fetchAll();
 
-// Add / Edit
+$borrowers = runSql($pdo, 'SELECT * FROM borrowers ORDER BY borrower_id')->fetchAll();
+
 $mode  = $_GET['mode'] ?? 'add';
 $id    = $_GET['id'] ?? null;
+
+// Load data for editing
+$current = ['borrower_id' => '', 'borrow_date' => '', 'due_date' => '', 'status' => 'pending'];
+if ($mode === 'edit' && $id) {
+    $current = runSql($pdo, 'SELECT * FROM borrow_transactions WHERE borrow_id = ?', [$id])->fetch() ?: $current;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $borrower_id = (int)($_POST['borrower_id'] ?? 0);
@@ -37,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// Delete
 if (isset($_GET['del'])) {
     runSql($pdo, 'DELETE FROM borrow_transactions WHERE borrow_id=:id', [':id'=>$_GET['del']]);
     header('Location: borrow_transactions.php');
@@ -52,35 +57,21 @@ if (isset($_GET['del'])) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-
 <nav class="navbar navbar-expand-lg navbar-dark bg-secondary mb-4">
   <div class="container">
     <a class="navbar-brand" href="index.php">Borrow‑Equipment Manager</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav4">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="nav4">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a class="nav-link" href="index.php">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" aria-current="page">Borrow Transactions</a></li>
-      </ul>
-    </div>
+    <ul class="navbar-nav ms-auto">
+      <li class="nav-item"><a class="nav-link" href="index.php">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link active" aria-current="page">Borrow Transactions</a></li>
+    </ul>
   </div>
 </nav>
-
 <div class="container">
-
   <h2 class="mt-4">Borrow Transactions</h2>
   <table class="table table-striped">
     <thead>
       <tr>
-        <th>Borrow ID</th>
-        <th>Borrower No</th>
-        <th>Full Name</th>
-        <th>Borrow Date</th>
-        <th>Due Date</th>
-        <th>Status</th>
-        <th>Actions</th>
+        <th>Borrow ID</th><th>Borrower No</th><th>Full Name</th><th>Borrow Date</th><th>Due Date</th><th>Status</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -105,16 +96,14 @@ if (isset($_GET['del'])) {
 
   <h2 class="mt-4"> <?php echo $mode === 'add' ? 'New Borrow Transaction' : 'Edit Transaction'; ?> </h2>
   <form method="post" class="row g-3">
-    <input type="hidden" name="id" value="<?php echo $id ?? ''; ?>">
-
+    <input type="hidden" name="id" value="<?php echo htmlspecialchars($id ?? ''); ?>">
+    
     <div class="col-md-6">
       <label class="form-label">Borrower <span class="text-danger">*</span></label>
       <select name="borrower_id" class="form-select" required>
         <option value="">-- select --</option>
-        <?php
-        $borrowers = runSql($pdo, 'SELECT * FROM borrowers ORDER BY borrower_id')->fetchAll();
-        foreach ($borrowers as $b): ?>
-        <option value="<?php echo $b['borrower_id']; ?>" <?php echo ($borrower_id == $b['borrower_id'])?'selected':''; ?>>
+        <?php foreach ($borrowers as $b): ?>
+        <option value="<?php echo $b['borrower_id']; ?>" <?php echo ($current['borrower_id'] == $b['borrower_id']) ? 'selected' : ''; ?>>
           <?php echo htmlspecialchars($b['borrower_no'].' – '.$b['full_name']); ?>
         </option>
         <?php endforeach; ?>
@@ -123,20 +112,20 @@ if (isset($_GET['del'])) {
 
     <div class="col-md-4">
       <label class="form-label">Borrow Date <span class="text-danger">*</span></label>
-      <input type="date" name="borrow_date" class="form-control" required>
+      <input type="date" name="borrow_date" class="form-control" value="<?php echo htmlspecialchars($current['borrow_date']); ?>" required>
     </div>
 
     <div class="col-md-4">
       <label class="form-label">Due Date</label>
-      <input type="date" name="due_date" class="form-control">
+      <input type="date" name="due_date" class="form-control" value="<?php echo htmlspecialchars($current['due_date']); ?>">
     </div>
 
     <div class="col-md-6">
       <label class="form-label">Status <span class="text-danger">*</span></label>
       <select name="status" class="form-select" required>
-        <option value="pending">Pending</option>
-        <option value="returned">Returned</option>
-        <option value="overdue">Overdue</option>
+        <option value="pending" <?php echo ($current['status'] === 'pending') ? 'selected' : ''; ?>>Pending</option>
+        <option value="returned" <?php echo ($current['status'] === 'returned') ? 'selected' : ''; ?>>Returned</option>
+        <option value="overdue" <?php echo ($current['status'] === 'overdue') ? 'selected' : ''; ?>>Overdue</option>
       </select>
     </div>
 
@@ -145,10 +134,6 @@ if (isset($_GET['del'])) {
       <a class="btn btn-secondary" href="borrow_transactions.php">Cancel</a>
     </div>
   </form>
-
 </div>
-
-<footer class="mt-5 text-center text-muted small">Generated by PHP‑Bootstrap CRUD UI</footer>
-
 </body>
 </html>
